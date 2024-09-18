@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport"
+          content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+    <meta http-equiv="X-UA-Compatible" content="ie=edge">
+    <title>Document</title>
+</head>
+<style>
+    html {
+        font-size: 0.625rem;
+        background-color: #0A120D;
+        color: #fff;
+    }
+</style>
+<body>
+
+<script>
+    let svgStr;
+
+    function dec2hex(dec) {
+        return dec.toString(16).padStart(2, '0');
+    }
+
+    function uniqId() {
+        const len = 7;
+        const arr = new Uint8Array((len || 40) / 2);
+
+        crypto.getRandomValues(arr);
+
+        return Array.from(arr, dec2hex).join('');
+    }
+
+    function download(filename, text) {
+        var pom = document.createElement('a');
+        pom.setAttribute('href', 'data:text/plain;charset=utf-8,' + encodeURIComponent(text));
+        pom.setAttribute('download', filename);
+
+        if (document.createEvent) {
+            var event = document.createEvent('MouseEvents');
+            event.initEvent('click', true, true);
+            pom.dispatchEvent(event);
+        }
+        else {
+            pom.click();
+        }
+    }
+
+    function genSvg(coords, stops, strokeWidth, radius) {
+        const {x1, y1, x2, y2} = coords;
+        const uniq = uniqId();
+
+        return `
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" width="100%" height="100%" preserveAspectRatio="none">
+        <defs>
+          <linearGradient
+            id="gradient_${uniq}"
+            x1="${x1}"
+            y1="${y1}"
+            x2="${x2}"
+            y2="${y2}"
+           >
+            ${stops}
+          </linearGradient>
+        </defs>
+
+        <rect
+          x="0"
+          y="0"
+          rx="${radius}px"
+          stroke-width="${strokeWidth}px"
+          width="100%"
+          height="100%"
+          stroke="url(#gradient_${uniq})" />
+      </svg>`;
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+        const txtarea = document.getElementById('textareaListener');
+        const genBtn = document.getElementById('genBtn');
+        const borderRadius = document.getElementById('borderRadius');
+
+        genBtn.onclick = function () {
+            const borderRadiusValue = borderRadius.value;
+
+            if (!borderRadiusValue) {
+                alert('Введите border radius');
+                return;
+            }
+
+            const textareaValue = txtarea.value;
+            const matches = textareaValue.match(/border: (\d+)px .+;\n+?border-image-source: linear-gradient\((.+)deg, (.+)\);/m);
+
+            if (matches) {
+                const stops = [...matches[3].matchAll(/(rgba\(.+?\)) (.+?%)/g)];
+
+                const stopsStr = stops.map((stop) => {
+                    return `<stop stop-color="${stop[1]}" offset="${stop[2]}"/>`;
+                }).join('');
+
+                const angleInRadians = (+matches[2] + 90) * Math.PI / 180;
+
+                const coords = {
+                    x1: (Math.cos(angleInRadians) + 1) / 2,
+                    y1: (Math.sin(angleInRadians) + 1) / 2,
+                    x2: (-Math.cos(angleInRadians) + 1) / 2,
+                    y2: (-Math.sin(angleInRadians) + 1) / 2
+                };
+
+                console.log({ stopsStr, stops, coords, angle: +matches[2], borderRadiusValue});
+
+
+                svgStr = genSvg(coords, stopsStr, +matches[1], borderRadiusValue);
+
+                let background = `url("data:image/svg+xml,${encodeURIComponent(svgStr)}") 100% no-repeat`;
+
+                if (window.someBackground.value) {
+                    background += `, ${ window.someBackground.value }`;
+                }
+
+                window.someContent.style = window.someStyles.value;
+                window.someContent.style.background = background;
+                window.svgRes.textContent = svgStr;
+            } else {
+                alert('Invalid input!');
+            }
+        };
+
+        window.saveBtn.onclick = function () {
+            if (!svgStr) {
+                alert('Сначала сгенерируйте');
+                return;
+            }
+
+            const fileName = prompt('Название файла (c .svg)');
+
+            download(fileName, svgStr);
+        };
+    });
+</script>
+
+<input id="borderRadius" type="text" placeholder="border radius" value="12"/>
+<br/><br/>
+<textarea
+        id="textareaListener"
+        placeholder="Вставь сюда градиент, формат:
+
+border: 2px solid;
+border-image-source: linear-gradient(180deg, rgba(166, 255, 53, 0.6) 0%, rgba(18, 32, 27, 0.2) 82.41%);
+"
+        style="width: 500px; height: 500px;"
+>
+    border: 2px solid;
+
+border-image-source: linear-gradient(329.87deg, rgba(166, 255, 53, 0.5) 0%, rgba(28, 50, 36, 0.5) 21.91%);
+
+</textarea>
+
+<br/><br/>
+
+<div style="display: flex; gap: 50px;">
+    <div style="width: 200px; height: 50px; font-size: 2rem;">
+        <div id="someContent">
+            Some content
+        </div>
+    </div>
+
+    <div>
+        <textarea style="width: 200px;height: 50px" id="someBackground">linear-gradient(159.58deg, #0A120D -10.21%, #11281A 99.98%)</textarea>
+            <br/><br/>
+    <textarea id="someStyles"
+              placeholder="введите свои стили"
+              style="
+width: 200px;
+height: 200px;
+">width: 100%;
+height: 100%;
+padding: 5px;
+border-radius: 1.2rem;
+color: #fff;</textarea>
+    </div>
+</div>
+<br/><br/>
+
+<pre id="svgRes"></pre>
+
+<br/>
+
+<button type="button"
+        id="genBtn"
+>
+    Generate
+</button>
+
+<button type="button"
+        id="saveBtn"
+>
+    Save
+</button>
+
+</body>
+</html>
